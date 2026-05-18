@@ -94,3 +94,100 @@ class FiUnamFS:
         cola_logs.put(
             f"Archivo eliminado: {nombre_archivo}"
         )
+
+    def buscar_entrada_vacia(self):
+
+        with open(self.ruta, "rb") as disco:
+            for i in range(256):
+                offset = DIRECTORIO_OFFSET + (i * ENTRADA_SIZE)
+                disco.seek(offset)
+                entrada = disco.read(ENTRADA_SIZE)
+                tipo = chr(entrada[0])
+                if tipo == "/":
+                    return offset
+        return None
+    
+    def buscar_siguiente_cluster_libre(self):
+
+        archivos = self.listar_archivos()
+
+        ultimo_cluster = 9
+
+        for archivo in archivos:
+            clusters_ocupados = (
+                archivo["tamaño"] + CLUSTER_SIZE - 1
+            ) // CLUSTER_SIZE
+            final = (
+                archivo["cluster"] + clusters_ocupados
+            )
+            if final > ultimo_cluster:
+                ultimo_cluster = final
+
+        return ultimo_cluster
+    
+    def copiar_hacia_fs(self):
+
+        print("\n=== Archivos disponibles en la carpeta ===\n")
+
+        archivos_locales = []
+
+        for archivo in os.listdir():
+            if archivo == self.ruta:
+                continue
+            if archivo.endswith(".py"):
+                continue
+            if os.path.isfile(archivo):
+                archivos_locales.append(archivo)
+                print(f"- {archivo}")
+        nombre_archivo = input(
+            "\nArchivo a copiar: "
+        )
+        if nombre_archivo not in archivos_locales:
+            print("\nEse archivo no existe")
+            return
+        if len(nombre_archivo) > 15:
+            print("\nNombre demasiado largo")
+            return
+        try:
+            with open(nombre_archivo, "rb") as archivo_local:
+                datos = archivo_local.read()
+        except:
+            print("\nNo se pudo abrir el archivo")
+            return
+        
+        tamaño = len(datos)
+
+        entrada_libre = self.buscar_entrada_vacia()
+
+        if entrada_libre is None:
+            print("\nNo hay entradas libres")
+            return
+
+        cluster_libre = self.buscar_siguiente_cluster_libre()
+
+        with open(self.ruta, "r+b") as disco:
+            inicio = cluster_libre * CLUSTER_SIZE
+            disco.seek(inicio)
+            disco.write(datos)
+            disco.seek(entrada_libre)
+            disco.write(b'-')
+            nombre = nombre_archivo.ljust(15)
+            disco.write(nombre.encode("ascii"))
+            disco.write(
+                struct.pack("<I", tamaño)
+            )
+            disco.write(
+                struct.pack("<I", cluster_libre)
+            )
+            fecha = "20250517120000"
+            disco.write(fecha.encode("ascii"))
+            disco.write(fecha.encode("ascii"))
+            restante = 64 - (
+                1 + 15 + 4 + 4 + 14 + 14
+            )
+            disco.write(b'\x00' * restante)
+
+        print("\nArchivo copiado hacia FiUnamFS")
+        cola_logs.put(
+            f"Archivo copiado hacia FiUnamFS: {nombre_archivo}"
+        )
