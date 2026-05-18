@@ -1,5 +1,11 @@
 import struct
 import os
+import struct
+from threads import cola_logs
+
+CLUSTER_SIZE = 2048
+DIRECTORIO_OFFSET = CLUSTER_SIZE
+ENTRADA_SIZE = 64
 
 class FiUnamFS:
 
